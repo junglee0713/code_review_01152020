@@ -45,7 +45,7 @@ dist_beta <- dist_make(bac_counts, bray_curtis)
 ```
 
 ```{r}
-pairwise_beta_plot <- function(s, dist_beta, study_group) {
+pairwise_beta_plot <- function(s, dist_beta, color_by) {
   ###========
   # Step I:  
   # Samples in dist_in may not appear in the metadata. Extract only common samples
@@ -57,18 +57,18 @@ pairwise_beta_plot <- function(s, dist_beta, study_group) {
   
   ###========
   # Step II: 
-  # Treat study_group as a factor
+  # Treat color_by as a factor
   ###========
-  study_group <- enquo(study_group)
-  if (!is.factor(s %>% pull(!!study_group))) {
+  color_by <- enquo(color_by)
+  if (!is.factor(s %>% pull(!!color_by))) {
     s <- s %>%
-      mutate(!!study_group := factor(!!study_group))
+      mutate(!!color_by := factor(!!color_by))
   }  
-  study_group_levels = s %>% pull(!!study_group) %>% levels()
+  color_by_levels = s %>% pull(!!color_by) %>% levels()
   
   ###========
   # Step III: 
-  # Compute pcoa
+  # Compute PCoA
   ###========
   pcoa_result <- ape::pcoa(dist_beta)
   pcoa_df <- s %>%
@@ -84,15 +84,15 @@ pairwise_beta_plot <- function(s, dist_beta, study_group) {
   ###========
   sub_df_list <- list()
   counter <- 0
-  for (i in 1:(length(study_group_levels) - 1)) {
-    Gr1 <- study_group_levels[i]
-    for (j in (i + 1):length(study_group_levels)) {
-      Gr2 <- study_group_levels[j]
+  for (i in 1:(length(color_by_levels) - 1)) {
+    Gr1 <- color_by_levels[i]
+    for (j in (i + 1):length(color_by_levels)) {
+      Gr2 <- color_by_levels[j]
       counter <- counter + 1
       curr_comparison <- paste0(Gr1, " vs ", Gr2)
       sub_df <- pcoa_df %>%
-        filter(!!study_group %in% c(Gr1, Gr2)) %>%
-        select(!!study_group, c("Axis.1", "Axis.2")) %>%
+        filter(!!color_by %in% c(Gr1, Gr2)) %>%
+        select(!!color_by, c("Axis.1", "Axis.2")) %>%
         droplevels() 
       sub_df_list[[counter]] <- sub_df %>%
         mutate(Comparison = curr_comparison) %>%
@@ -105,7 +105,7 @@ pairwise_beta_plot <- function(s, dist_beta, study_group) {
   
   g <- all_df %>%
      ggplot(aes(Axis.1, Axis.2)) +
-     geom_point(aes(color = !!study_group)) +
+     geom_point(aes(color = !!color_by)) +
      theme_bw() +
      theme(aspect.ratio = 1) +
      theme(legend.position = "bottom") +
@@ -118,4 +118,13 @@ pairwise_beta_plot <- function(s, dist_beta, study_group) {
 ```{r, fig.width = 8, fig.height = 10}
 pairwise_beta_plot(s, dist_beta, Hospital)
 ```
+
+```{r}
+# pairwise adonis result
+```
+
+```{r}
+# differential abundance plots
+```
+
 
