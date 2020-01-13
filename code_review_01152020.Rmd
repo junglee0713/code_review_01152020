@@ -1,0 +1,121 @@
+---
+title: "Pairwise Comparison of Beta Diversity"
+author: "Jung-Jin Lee"
+date: "Jan 15, 2020"
+output: pdf_document
+---
+
+```{r, include = FALSE, echo = FALSE}
+library(knitr)
+opts_chunk$set(
+  tidy = FALSE,
+  cache = FALSE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  dpi = 100,
+  fig.align = "center"
+  )
+library(tidyverse)
+library(usedist)
+library(abdiv)
+library(ggsci)
+```
+
+```{r}
+# Metadata
+# SampleID: sample identifier
+s <- "meta.tsv" %>%
+  read_tsv() 
+dim(s)
+
+# Bacteria counts data
+bac_counts <- "bacteria_counts.tsv" %>%
+  read_tsv() %>%
+  column_to_rownames(var = "Taxa") %>%
+  t()
+dim(bac_counts) # Each row is a SampleID and each column is a species
+
+# Bacteria props data
+bac_props <- sweep(bac_counts, 1, rowSums(bac_counts), "/")
+dim(bac_props)
+
+# Make a distance object using usedist::dist_make()
+dist_beta <- dist_make(bac_counts, bray_curtis) 
+```
+
+```{r}
+pairwise_beta_plot <- function(s, dist_beta, study_group) {
+  ###========
+  # Step I:  
+  # Samples in dist_in may not appear in the metadata. Extract only common samples
+  ###========
+  common_samples <- intersect(s$SampleID, attributes(dist_beta)$Labels)
+  s <- s %>% 
+    filter(SampleID %in% common_samples)
+  dist_beta <- dist_subset(dist_beta, s$SampleID)
+  
+  ###========
+  # Step II: 
+  # Treat study_group as a factor
+  ###========
+  study_group <- enquo(study_group)
+  if (!is.factor(s %>% pull(!!study_group))) {
+    s <- s %>%
+      mutate(!!study_group := factor(!!study_group))
+  }  
+  study_group_levels = s %>% pull(!!study_group) %>% levels()
+  
+  ###========
+  # Step III: 
+  # Compute pcoa
+  ###========
+  pcoa_result <- ape::pcoa(dist_beta)
+  pcoa_df <- s %>%
+    left_join(pcoa_result$vectors[, c("Axis.1", "Axis.2")] %>%
+                as.data.frame() %>%
+                rownames_to_column("SampleID"), 
+              by = "SampleID")
+  pcoa_pct <- round(pcoa_result$values$Relative_eig*100, 1) 
+
+  ###========
+  # Step IV: 
+  # Create pairwise ordination
+  ###========
+  sub_df_list <- list()
+  counter <- 0
+  for (i in 1:(length(study_group_levels) - 1)) {
+    Gr1 <- study_group_levels[i]
+    for (j in (i + 1):length(study_group_levels)) {
+      Gr2 <- study_group_levels[j]
+      counter <- counter + 1
+      curr_comparison <- paste0(Gr1, " vs ", Gr2)
+      sub_df <- pcoa_df %>%
+        filter(!!study_group %in% c(Gr1, Gr2)) %>%
+        select(!!study_group, c("Axis.1", "Axis.2")) %>%
+        droplevels() 
+      sub_df_list[[counter]] <- sub_df %>%
+        mutate(Comparison = curr_comparison) %>%
+        mutate_if(is.factor, as.character)
+    }
+  }
+  
+  all_df <- bind_rows(sub_df_list) %>%
+    mutate(Comparison = factor(Comparison, levels = unique(.$Comparison)))
+  
+  g <- all_df %>%
+     ggplot(aes(Axis.1, Axis.2)) +
+     geom_point(aes(color = !!study_group)) +
+     theme_bw() +
+     theme(aspect.ratio = 1) +
+     theme(legend.position = "bottom") +
+     facet_wrap(~Comparison) 
+
+  return(g) 
+}  
+```  
+
+```{r, fig.width = 8, fig.height = 10}
+pairwise_beta_plot(s, dist_beta, Hospital)
+```
+
