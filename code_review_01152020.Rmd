@@ -92,16 +92,15 @@ pairwise_beta_plot <- function(s, dist_beta, color_by) {
       curr_comparison <- paste0(Gr1, " vs ", Gr2)
       sub_df <- pcoa_df %>%
         filter(!!color_by %in% c(Gr1, Gr2)) %>%
-        select(!!color_by, c("Axis.1", "Axis.2")) %>%
         droplevels() 
       sub_df_list[[counter]] <- sub_df %>%
-        mutate(Comparison = curr_comparison) %>%
+        mutate(PairwiseBetaComparison = curr_comparison) %>%
         mutate_if(is.factor, as.character)
     }
   }
   
   all_df <- bind_rows(sub_df_list) %>%
-    mutate(Comparison = factor(Comparison, levels = unique(.$Comparison)))
+    mutate(PairwiseBetaComparison = factor(PairwiseBetaComparison, levels = unique(.$PairwiseBetaComparison)))
   
   g <- all_df %>%
      ggplot(aes(Axis.1, Axis.2)) +
@@ -109,22 +108,24 @@ pairwise_beta_plot <- function(s, dist_beta, color_by) {
      theme_bw() +
      theme(aspect.ratio = 1) +
      theme(legend.position = "bottom") +
-     facet_wrap(~Comparison) 
+     facet_wrap(~PairwiseBetaComparison) 
 
-  return(g) 
+  return(list(df = all_df, plot = g))
 }  
 ```  
 
+```{r}
+plot <- pairwise_beta_plot(s, dist_beta, Hospital)$plot
+df <- pairwise_beta_plot(s, dist_beta, Hospital)$df
+```
+
 ```{r, fig.width = 8, fig.height = 10}
-pairwise_beta_plot(s, dist_beta, Hospital)
+plot
 ```
 
 ```{r}
-# pairwise adonis result
+# Test result to be added
 ```
 
-```{r}
-# differential abundance plots
-```
 
 
