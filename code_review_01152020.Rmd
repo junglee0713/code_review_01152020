@@ -3,6 +3,8 @@ title: "Pairwise Comparison of Beta Diversity"
 author: "Jung-Jin Lee"
 date: "Jan 15, 2020"
 output: pdf_document
+toc: yes
+toc_depth: 4
 ---
 
 ```{r, include = FALSE, echo = FALSE}
@@ -20,10 +22,16 @@ library(tidyverse)
 library(usedist)
 library(abdiv)
 library(ggsci)
+library(vegan)
+library(gt)
 ```
 
+\newpage
+
+# Read in data
+
 ```{r}
-# Metadata
+# Mapping file
 # SampleID: sample identifier
 s <- "meta.tsv" %>%
   read_tsv() 
@@ -41,8 +49,50 @@ bac_props <- sweep(bac_counts, 1, rowSums(bac_counts), "/")
 dim(bac_props)
 
 # Make a distance object using usedist::dist_make()
-dist_beta <- dist_make(bac_counts, bray_curtis) 
+dist_beta <- dist_make(bac_props, bray_curtis) 
+
+# Make sure that SampleIDs are aligned
+dist_beta <- dist_subset(dist_beta, s$SampleID)
+all(attributes(dist_beta)$Labels == s$SampleID)
 ```
+
+# Overall beta diversity
+
+```{r}
+pcoa_result <- ape::pcoa(dist_beta)
+pcoa_df <- s %>%
+  left_join(pcoa_result$vectors[, c("Axis.1", "Axis.2")] %>%
+              as.data.frame() %>%
+              rownames_to_column("SampleID"), 
+            by = "SampleID")
+pcoa_pct <- round(pcoa_result$values$Relative_eig*100, 1) 
+```
+
+```{r}
+# Overall PCoA plot
+pcoa_df %>%
+  ggplot(aes(Axis.1, Axis.2)) +
+  geom_point(aes(color = Hospital)) +
+  theme_bw() +
+  xlab(paste0("PCoA axis 1 (", pcoa_pct[1], "%)")) +
+  ylab(paste0("PCoA axis 2 (", pcoa_pct[2], "%)")) +
+  theme(aspect.ratio = 1) +
+  theme(legend.position = "bottom") 
+```
+
+```{r}
+# PermANOVA
+adonis(dist_beta ~ Hospital, data = s, permutation = 999)$aov.tab %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Term") %>%
+  gt() %>%
+  fmt_number(columns = c("SumsOfSqs", "MeanSqs", "F.Model")) %>%
+  fmt_percent(columns = "R2")
+```
+
+\newpage
+
+# Pairwise comparison of beta diversity
 
 ```{r}
 pairwise_beta_plot <- function(s, dist_beta, color_by) {
@@ -104,12 +154,14 @@ pairwise_beta_plot <- function(s, dist_beta, color_by) {
                                            levels = unique(.$PairwiseBetaComparison)))
   
   g <- all_df %>%
-     ggplot(aes(Axis.1, Axis.2)) +
-     geom_point(aes(color = !!color_by)) +
-     theme_bw() +
-     theme(aspect.ratio = 1) +
-     theme(legend.position = "bottom") +
-     facet_wrap(~PairwiseBetaComparison) 
+    ggplot(aes(Axis.1, Axis.2)) +
+    geom_point(aes(color = !!color_by)) +
+    theme_bw() +
+    xlab(paste0("PCoA axis 1 (", pcoa_pct[1], "%)")) +
+    ylab(paste0("PCoA axis 2 (", pcoa_pct[2], "%)")) +
+    theme(aspect.ratio = 1) +
+    theme(legend.position = "bottom") +
+    facet_wrap(~PairwiseBetaComparison) 
 
   return(list(df = all_df, plot = g))
 }  
@@ -126,6 +178,32 @@ print(plot)
 
 ```{r}
 # Test result to be added
+permanova_result_list <- list()
+for (i in 1:length(unique(df$PairwiseBetaComparison))) {
+  Comp <- unique(df$PairwiseBetaComparison)[[i]] 
+  sub_df <- df %>%
+    filter(PairwiseBetaComparison %in% Comp) %>%
+    droplevels()
+  sub_dist <- dist_subset(dist_beta, sub_df$SampleID)
+  if (all(attributes(sub_dist)$Label == sub_df$SampleID)) {
+    set.seed(2020)
+    permanova_out <- adonis(sub_dist ~ Hospital, data = sub_df, permutations = 999)$aov.tab
+    permanova_result_list[[i]] <- data.frame(PairwiseBetaComparison = as.character(Comp),
+                                             nominal_p_value = permanova_out[1, "Pr(>F)"],
+                                             stringsAsFactors = FALSE)
+  }
+}
+all_permanova_result <- bind_rows(permanova_result_list) %>%
+  mutate(FDR = p.adjust(nominal_p_value, method = "BH")) %>%
+  mutate(FDR = round(FDR, 3))
+```
+
+```{r, fig.width = 8, fig.height = 10}
+plot_annotated <- plot +
+  geom_text(data = all_permanova_result,
+            aes(x = -Inf, y = -Inf, label = paste0("p=", FDR)),
+            hjust = -0.1, vjust = -0.6)
+print(plot_annotated)
 ```
 
 
