@@ -100,7 +100,8 @@ pairwise_beta_plot <- function(s, dist_beta, color_by) {
   }
   
   all_df <- bind_rows(sub_df_list) %>%
-    mutate(PairwiseBetaComparison = factor(PairwiseBetaComparison, levels = unique(.$PairwiseBetaComparison)))
+    mutate(PairwiseBetaComparison = factor(PairwiseBetaComparison, 
+                                           levels = unique(.$PairwiseBetaComparison)))
   
   g <- all_df %>%
      ggplot(aes(Axis.1, Axis.2)) +
@@ -120,7 +121,7 @@ df <- pairwise_beta_plot(s, dist_beta, Hospital)$df
 ```
 
 ```{r, fig.width = 8, fig.height = 10}
-plot
+print(plot)
 ```
 
 ```{r}
